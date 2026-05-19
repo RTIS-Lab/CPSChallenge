@@ -23,7 +23,7 @@ The performance metrics output can be used at runtime to take online decisions, 
 
 **Authors**: Paolo Pazzaglia, Kevin Schmidt, Laura Beermann, Dirk Ziegenbein and Arne Hamann
 
-Contact email: paolo.pazzaglia `at` de.bosch.com
+For any questions and feedback, especially if you think could be useful also for other users, please consider opening an issue 
 
 ---
 
@@ -134,7 +134,7 @@ Termination and cleanup:
 
 ### Python
 
-TODO
+You'll need a Python library to handle the FMI standard. The most common and recommended library is [FMpy](https://fmpy.readthedocs.io/en/latest/)
 
 
 ---
