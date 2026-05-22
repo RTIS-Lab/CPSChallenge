@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+  Bosch RTAS Challenge
+  Copyright (c) 2026 Robert Bosch GmbH
+  SPDX-License-Identifier: AGPL-3.0
+-->
+<fmiModelDescription
+  fmiVersion="2.0"
+  modelName="LateralMotionControl"
+  guid="{ec101913-52ec-40d8-afe6-5fbb52430f74}"
+  description="Lateral motion control system based on discrete-time state-space model, incorporating sensor, estimator, controller, feedforward, and actuator tasks. Includes internal, remote platform-based, and real performance metrics."
+  generationTool="Manual"
+  variableNamingConvention="structured">
+
+  <CoSimulation
+    modelIdentifier="LateralMotionControl"
+    canHandleVariableCommunicationStepSize="true"
+    canInterpolateInputs="false"
+    canRunAsynchronuously="false"
+    canBeInstantiatedOnlyOncePerProcess="false"
+    canNotUseMemoryManagementFunctions="false"
+    canGetAndSetFMUstate="false"
+    canSerializeFMUstate="false"
+    providesDirectionalDerivative="false"
+    />
+
+  <ModelVariables>
+    <!-- Parameters (configurable at initialization) -->
+
+    <!-- K_trc_fb Matrix (feedback gain) - 1x6 -->
+    <ScalarVariable name="K_trc_fb_0_0" valueReference="1" causality="parameter" variability="fixed" initial="exact" description="Feedback gain K_trc_fb[0][0]."><Real start="-0.987"/></ScalarVariable>
+    <ScalarVariable name="K_trc_fb_0_1" valueReference="2" causality="parameter" variability="fixed" initial="exact" description="Feedback gain K_trc_fb[0][1]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="K_trc_fb_0_2" valueReference="3" causality="parameter" variability="fixed" initial="exact" description="Feedback gain K_trc_fb[0][2]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="K_trc_fb_0_3" valueReference="4" causality="parameter" variability="fixed" initial="exact" description="Feedback gain K_trc_fb[0][3]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="K_trc_fb_0_4" valueReference="5" causality="parameter" variability="fixed" initial="exact" description="Feedback gain K_trc_fb[0][4]."><Real start="8.00"/></ScalarVariable>
+    <ScalarVariable name="K_trc_fb_0_5" valueReference="6" causality="parameter" variability="fixed" initial="exact" description="Feedback gain K_trc_fb[0][5]."><Real start="1.75"/></ScalarVariable>
+
+    <!-- K_trc_ff Matrix (feedforward gain) - 1x2 -->
+    <ScalarVariable name="K_trc_ff_0_0" valueReference="7" causality="parameter" variability="fixed" initial="exact" description="Feedforward gain K_trc_ff[0][0]."><Real start="1.987"/></ScalarVariable>
+    <ScalarVariable name="K_trc_ff_0_1" valueReference="8" causality="parameter" variability="fixed" initial="exact" description="Feedforward gain K_trc_ff[0][1]."><Real start="0.1974"/></ScalarVariable>
+
+    <!-- K_yrc_x Matrix (yaw rate controller state gain) - 1x6 -->
+    <ScalarVariable name="K_yrc_x_0_0" valueReference="9" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][0]."><Real start="-0.2876"/></ScalarVariable>
+    <ScalarVariable name="K_yrc_x_0_1" valueReference="10" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][1]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="K_yrc_x_0_2" valueReference="11" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][2]."><Real start="1.0"/></ScalarVariable>
+    <ScalarVariable name="K_yrc_x_0_3" valueReference="12" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][3]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="K_yrc_x_0_4" valueReference="13" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][4]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="K_yrc_x_0_5" valueReference="14" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][5]."><Real start="0.0"/></ScalarVariable>
+    
+    <!-- K_yrc_psi Matrix (yaw rate controller psi_dot gain) - 1x1 -->
+    <ScalarVariable name="K_yrc_psi_0_0" valueReference="15" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller psi_dot gain K_yrc_psi[0][0]."><Real start="0.2876"/></ScalarVariable>
+
+    <!-- Initial State (x0) - 6 states -->
+    <ScalarVariable name="x0_0" valueReference="16" causality="parameter" variability="fixed" description="Initial value for state x[0] (Yaw rate)."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="x0_1" valueReference="17" causality="parameter" variability="fixed" description="Initial value for state x[1] (Slip angle)."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="x0_2" valueReference="18" causality="parameter" variability="fixed" description="Initial value for state x[2] (Steering angle)."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="x0_3" valueReference="19" causality="parameter" variability="fixed" description="Initial value for state x[3] (Steering rate)."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="x0_4" valueReference="20" causality="parameter" variability="fixed" description="Initial value for state x[4] (Lateral error)."><Real start="0.1"/></ScalarVariable>
+    <ScalarVariable name="x0_5" valueReference="21" causality="parameter" variability="fixed" description="Initial value for state x[5] (Lateral error rate)."><Real start="0.0"/></ScalarVariable>
+
+    <!-- Noise Mean - 6 states -->
+    <ScalarVariable name="noise_mean_0" valueReference="22" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[0]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_mean_1" valueReference="23" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[1]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_mean_2" valueReference="24" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[2]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_mean_3" valueReference="25" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[3]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_mean_4" valueReference="26" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[4]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_mean_5" valueReference="27" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[5]."><Real start="0.0"/></ScalarVariable>
+    
+    <!-- Noise Standard Deviation - 6 states -->
+    <ScalarVariable name="noise_std_dev_0" valueReference="28" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[0]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_std_dev_1" valueReference="29" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[1]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_std_dev_2" valueReference="30" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[2]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_std_dev_3" valueReference="31" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[3]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_std_dev_4" valueReference="32" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[4]."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="noise_std_dev_5" valueReference="33" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[5]."><Real start="0.0"/></ScalarVariable>
+
+    <!-- Vehicle initial velocity (m/sec) -->
+    <ScalarVariable name="init_velocity" valueReference="34" causality="parameter" variability="fixed" description="Initial vehicle velocity for determining system matrices (Ad, Bd, BdFd)."><Real start="10.0" min="0.1" unit="m/s"/></ScalarVariable>
+
+    <!-- Inputs (external signals) -->
+    <!-- BOOLEAN Triggers (start from 100) -->
+    <ScalarVariable name="sensor_trigger_activated_in" valueReference="100" causality="input" variability="discrete" description="Trigger for sensor activation. True when sensor reads state."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="sensor_trigger_finished_in" valueReference="101" causality="input" variability="discrete" description="Trigger for sensor finished. True when sensor output is ready."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="network_sc_trigger_sent_in" valueReference="102" causality="input" variability="discrete" description="Trigger for network (sensor to remote platform) sending data."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="network_sc_trigger_received_in" valueReference="103" causality="input" variability="discrete" description="Trigger for network (sensor to remote platform) receiving data."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="estimator_trigger_activated_in" valueReference="104" causality="input" variability="discrete" description="Trigger for estimator activation. True when estimator starts calculating output."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="estimator_trigger_finished_in" valueReference="105" causality="input" variability="discrete" description="Trigger for estimator finished. True when estimator output is ready."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="controller_trigger_activated_in" valueReference="106" causality="input" variability="discrete" description="Trigger for controller activation. True when controller starts calculating output."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="controller_trigger_finished_in" valueReference="107" causality="input" variability="discrete" description="Trigger for controller finished. True when controller output is ready."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="feedforward_trigger_activated_in" valueReference="108" causality="input" variability="discrete" description="Trigger for feedforward activation. True when feedforward starts calculating output."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="feedforward_trigger_finished_in" valueReference="109" causality="input" variability="discrete" description="Trigger for feedforward finished. True when feedforward output is ready."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="merger_trigger_activated_in" valueReference="110" causality="input" variability="discrete" description="Trigger for merger activation. True when merger starts combining controller and feedforward signals."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="merger_trigger_finished_in" valueReference="111" causality="input" variability="discrete" description="Trigger for merger finished. True when merger output is ready."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="network_ca_trigger_sent_in" valueReference="112" causality="input" variability="discrete" description="Trigger for network (remote platform to actuator) sending data."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="network_ca_trigger_received_in" valueReference="113" causality="input" variability="discrete" description="Trigger for network (remote platform to actuator) receiving data."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="actuator_trigger_activated_in" valueReference="114" causality="input" variability="discrete" description="Trigger for actuator activation. True when actuator receives input."><Boolean start="false"/></ScalarVariable>
+    <ScalarVariable name="actuator_trigger_finished_in" valueReference="115" causality="input" variability="discrete" description="Trigger for actuator finished. True when actuator output is ready."><Boolean start="false"/></ScalarVariable>
+
+    <!-- REAL Inputs (start after triggers) -->
+    <!-- Feedforward reference input (ff_ref) - 2 components -->
+    <ScalarVariable name="ff_ref_0" valueReference="116" causality="input" variability="discrete" description="Feedforward reference input component 0."><Real start="0.0"/></ScalarVariable>
+    <ScalarVariable name="ff_ref_1" valueReference="117" causality="input" variability="discrete" description="Feedforward reference input component 1."><Real start="0.0"/></ScalarVariable>
+
+    <!-- Vehicle velocity (m/sec) -->
+    <ScalarVariable name="velocity" valueReference="118" causality="input" variability="discrete" description="Vehicle velocity for determining system matrices (Ad, Bd, BdFd). Changes recalculate matrices."><Real start="10.0" min="0.1" unit="m/s"/></ScalarVariable>
+
+    <!-- Outputs (start from 1000) -->
+    <!-- Current Physical System State (current_phys_state) - 6 states -->
+    <ScalarVariable name="current_phys_state_0" valueReference="1000" causality="output" variability="continuous" description="Current value of physical state variable x[0] (Yaw rate)."><Real/></ScalarVariable>
+    <ScalarVariable name="current_phys_state_1" valueReference="1001" causality="output" variability="continuous" description="Current value of physical state variable x[1] (Slip angle)."><Real/></ScalarVariable>
+    <ScalarVariable name="current_phys_state_2" valueReference="1002" causality="output" variability="continuous" description="Current value of physical state variable x[2] (Steering angle)."><Real/></ScalarVariable>
+    <ScalarVariable name="current_phys_state_3" valueReference="1003" causality="output" variability="continuous" description="Current value of physical state variable x[3] (Steering rate)."><Real/></ScalarVariable>
+    <ScalarVariable name="current_phys_state_4" valueReference="1004" causality="output" variability="continuous" description="Current value of physical state variable x[4] (Lateral error)."><Real/></ScalarVariable>
+    <ScalarVariable name="current_phys_state_5" valueReference="1005" causality="output" variability="continuous" description="Current value of physical state variable x[5] (Lateral error rate)."><Real/></ScalarVariable>
+
+    <!-- sens_out (Sensor Output) - 5 states -->
+    <ScalarVariable name="sens_out_0" valueReference="1006" causality="output" variability="continuous" description="Output from the sensor for physical state 0 (Yaw rate)."><Real/></ScalarVariable>
+    <ScalarVariable name="sens_out_1" valueReference="1007" causality="output" variability="continuous" description="Output from the sensor for physical state 2 (Steering angle)."><Real/></ScalarVariable>
+    <ScalarVariable name="sens_out_2" valueReference="1008" causality="output" variability="continuous" description="Output from the sensor for physical state 3 (Steering rate)."><Real/></ScalarVariable>
+    <ScalarVariable name="sens_out_3" valueReference="1009" causality="output" variability="continuous" description="Output from the sensor for physical state 4 (Lateral error)."><Real/></ScalarVariable>
+    <ScalarVariable name="sens_out_4" valueReference="1010" causality="output" variability="continuous" description="Sensed vehicle velocity."><Real/></ScalarVariable>
+
+    <!-- est_states_out (Estimator Output) - 6 states -->
+    <ScalarVariable name="est_states_out_0" valueReference="1011" causality="output" variability="continuous" description="Output from the estimator for state 0 (Yaw rate)."><Real/></ScalarVariable>
+    <ScalarVariable name="est_states_out_1" valueReference="1012" causality="output" variability="continuous" description="Output from the estimator for state 1 (Slip angle)."><Real/></ScalarVariable>
+    <ScalarVariable name="est_states_out_2" valueReference="1013" causality="output" variability="continuous" description="Output from the estimator for state 2 (Steering angle)."><Real/></ScalarVariable>
+    <ScalarVariable name="est_states_out_3" valueReference="1014" causality="output" variability="continuous" description="Output from the estimator for state 3 (Steering rate)."><Real/></ScalarVariable>
+    <ScalarVariable name="est_states_out_4" valueReference="1015" causality="output" variability="continuous" description="Output from the estimator for state 4 (Lateral error)."><Real/></ScalarVariable>
+    <ScalarVariable name="est_states_out_5" valueReference="1016" causality="output" variability="continuous" description="Output from the estimator for state 5 (Lateral error rate)."><Real/></ScalarVariable>
+
+    <!-- fb_psi_dot_out (Feedback Controller Output) - 1 component -->
+    <ScalarVariable name="fb_psi_dot_out_0" valueReference="1017" causality="output" variability="continuous" description="Feedback component of the desired yaw rate command."><Real/></ScalarVariable>
+
+    <!-- ff_out (Feedforward Trajectory Output) - 2 components -->
+    <ScalarVariable name="ff_out_0" valueReference="1018" causality="output" variability="continuous" description="Output from the feedforward block for ff_ref component 0."><Real/></ScalarVariable>
+    <ScalarVariable name="ff_out_1" valueReference="1019" causality="output" variability="continuous" description="Output from the feedforward block for ff_ref component 1."><Real/></ScalarVariable>
+
+    <!-- ff_psi_dot_out (Feedforward Yaw Rate Command Output) - 1 component -->
+    <ScalarVariable name="ff_psi_dot_out_0" valueReference="1020" causality="output" variability="continuous" description="Feedforward component of the desired yaw rate command."><Real/></ScalarVariable>
+
+    <!-- agg_delta_out (merger Output) - 1 component -->
+    <ScalarVariable name="agg_delta_out_0" valueReference="1021" causality="output" variability="continuous" description="Aggregated steering angle delta command from the merger."><Real/></ScalarVariable>
+
+    <!-- act_out (Actuator Output) - 1 component -->
+    <ScalarVariable name="act_out_0" valueReference="1022" causality="output" variability="continuous" description="Final steering angle command output from the actuator."><Real/></ScalarVariable>
+    
+    <!-- Simulation Time and Step -->
+    <ScalarVariable name="current_time_out" valueReference="1023" causality="output" variability="continuous" description="Current simulation time."><Real/></ScalarVariable>
+    <ScalarVariable name="current_step_out" valueReference="1024" causality="output" variability="discrete" description="Current simulation step number."><Integer/></ScalarVariable>
+
+    <!-- Critical Section Status -->
+    <ScalarVariable name="in_local_platform_critical_section" valueReference="1025" causality="output" variability="discrete" description="True if the vehicle is performing a critical maneuver, based on network-delayed data."><Boolean/></ScalarVariable>
+    <ScalarVariable name="in_remote_platform_critical_section" valueReference="1026" causality="output" variability="discrete" description="True if the vehicle is performing a critical maneuver, based on estimated state."><Boolean/></ScalarVariable>
+    <ScalarVariable name="real_critical_section" valueReference="1027" causality="output" variability="discrete" description="True if the vehicle is performing a critical maneuver, based on ground-truth data (ideal)."><Boolean/></ScalarVariable>
+
+    <!-- Rolling Performance Output -->
+    <ScalarVariable name="in_local_platform_rolling_performance" valueReference="1028" causality="output" variability="continuous" description="Rolling average of x'Qx, calculated in the local platform based on network-delayed data."><Real/></ScalarVariable>
+    <ScalarVariable name="in_remote_platform_rolling_performance" valueReference="1029" causality="output" variability="continuous" description="Rolling average of x'Qx, calculated in the remote platform based on estimated state."><Real/></ScalarVariable>
+    <ScalarVariable name="real_rolling_performance" valueReference="1030" causality="output" variability="continuous" description="Rolling average of x'Qx, calculated using ground-truth data (ideal)."><Real/></ScalarVariable>
+
+    <!-- Average Performance Output -->
+    <ScalarVariable name="in_local_platform_average_performance" valueReference="1031" causality="output" variability="continuous" description="Cumulative average of x'Qx, calculated in the local platform based on network-delayed data."><Real/></ScalarVariable>
+    <ScalarVariable name="in_remote_platform_average_performance" valueReference="1032" causality="output" variability="continuous" description="Cumulative average of x'Qx, calculated in the remote platform based on estimated state."><Real/></ScalarVariable>
+    <ScalarVariable name="real_average_performance" valueReference="1033" causality="output" variability="continuous" description="Cumulative average of x'Qx, calculated using ground-truth data (ideal)."><Real/></ScalarVariable>
+
+    <!-- Threshold Error Counter -->
+    <ScalarVariable name="in_local_platform_threshold_error_cntr" valueReference="1034" causality="output" variability="discrete" description="Count of lateral error threshold violations, based on network-delayed data."><Integer/></ScalarVariable>
+    <ScalarVariable name="in_remote_platform_threshold_error_cntr" valueReference="1035" causality="output" variability="discrete" description="Count of lateral error threshold violations, based on estimated state."><Integer/></ScalarVariable>
+    <ScalarVariable name="real_threshold_error_cntr" valueReference="1036" causality="output" variability="discrete" description="Count of lateral error threshold violations, based on ground-truth data (ideal)."><Integer/></ScalarVariable>
+
+    <!-- Constraint Violation Flag -->
+    <ScalarVariable name="in_local_platform_violated_constraint" valueReference="1037" causality="output" variability="discrete" description="True if lateral error currently exceeds threshold, based on network-delayed data."><Boolean/></ScalarVariable>
+    <ScalarVariable name="in_remote_platform_violated_constraint" valueReference="1038" causality="output" variability="discrete" description="True if lateral error currently exceeds threshold, based on estimated state."><Boolean/></ScalarVariable>
+    <ScalarVariable name="real_violated_constraint" valueReference="1039" causality="output" variability="discrete" description="True if lateral error currently exceeds threshold, based on ground-truth data (ideal)."><Boolean/></ScalarVariable>
+  </ModelVariables>
+
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="35" /> <!-- current_phys_state_0 (VR 1000) -->
+      <Unknown index="36" /> <!-- current_phys_state_1 (VR 1001) -->
+      <Unknown index="37" /> <!-- current_phys_state_2 (VR 1002) -->
+      <Unknown index="38" /> <!-- current_phys_state_3 (VR 1003) -->
+      <Unknown index="39" /> <!-- current_phys_state_4 (VR 1004) -->
+      <Unknown index="40" /> <!-- current_phys_state_5 (VR 1005) -->
+      <Unknown index="41" /> <!-- sens_out_0 (VR 1006) -->
+      <Unknown index="42" /> <!-- sens_out_1 (VR 1007) -->
+      <Unknown index="43" /> <!-- sens_out_2 (VR 1008) -->
+      <Unknown index="44" /> <!-- sens_out_3 (VR 1009) -->
+      <Unknown index="45" /> <!-- sens_out_4 (VR 1010) -->
+      <Unknown index="46" /> <!-- est_states_out_0 (VR 1011) -->
+      <Unknown index="47" /> <!-- est_states_out_1 (VR 1012) -->
+      <Unknown index="48" /> <!-- est_states_out_2 (VR 1013) -->
+      <Unknown index="49" /> <!-- est_states_out_3 (VR 1014) -->
+      <Unknown index="50" /> <!-- est_states_out_4 (VR 1015) -->
+      <Unknown index="51" /> <!-- est_states_out_5 (VR 1016) -->
+      <Unknown index="52" /> <!-- fb_psi_dot_out_0 (VR 1017) -->
+      <Unknown index="53" /> <!-- ff_out_0 (VR 1018) -->
+      <Unknown index="54" /> <!-- ff_out_1 (VR 1019) -->
+      <Unknown index="55" /> <!-- ff_psi_dot_out_0 (VR 1020) -->
+      <Unknown index="56" /> <!-- agg_delta_out_0 (VR 1021) -->
+      <Unknown index="57" /> <!-- act_out_0 (VR 1022) -->
+      <Unknown index="58" /> <!-- current_time_out (VR 1023) -->
+      <Unknown index="59" /> <!-- current_step_out (VR 1024) -->
+      <Unknown index="60" /> <!-- in_local_platform_critical_section (VR 1025) -->
+      <Unknown index="61" /> <!-- in_remote_platform_critical_section (VR 1026) -->
+      <Unknown index="62" /> <!-- real_critical_section (VR 1027) -->
+      <Unknown index="63" /> <!-- in_local_platform_rolling_performance (VR 1028) -->
+      <Unknown index="64" /> <!-- in_remote_platform_rolling_performance (VR 1029) -->
+      <Unknown index="65" /> <!-- real_rolling_performance (VR 1030) -->
+      <Unknown index="66" /> <!-- in_local_platform_average_performance (VR 1031) -->
+      <Unknown index="67" /> <!-- in_remote_platform_average_performance (VR 1032) -->
+      <Unknown index="68" /> <!-- real_average_performance (VR 1033) -->
+      <Unknown index="69" /> <!-- in_local_platform_threshold_error_cntr (VR 1034) -->
+      <Unknown index="70" /> <!-- in_remote_platform_threshold_error_cntr (VR 1035) -->
+      <Unknown index="71" /> <!-- real_threshold_error_cntr (VR 1036) -->
+      <Unknown index="72" /> <!-- in_local_platform_violated_constraint (VR 1037) -->
+      <Unknown index="73" /> <!-- in_remote_platform_violated_constraint (VR 1038) -->
+      <Unknown index="74" /> <!-- real_violated_constraint (VR 1039) -->
+    </Outputs>
+  </ModelStructure>
+
+</fmiModelDescription>
