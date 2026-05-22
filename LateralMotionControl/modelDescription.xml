@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 
+<!--
   Bosch RTAS Challenge
   Copyright (c) 2026 Robert Bosch GmbH
   SPDX-License-Identifier: AGPL-3.0
@@ -24,6 +24,12 @@
     providesDirectionalDerivative="false"
     />
 
+  <UnitDefinitions>
+    <Unit name="m/s">
+      <BaseUnit m="1" s="-1"/>
+    </Unit>
+  </UnitDefinitions>
+
   <ModelVariables>
     <!-- Parameters (configurable at initialization) -->
 
@@ -46,7 +52,7 @@
     <ScalarVariable name="K_yrc_x_0_3" valueReference="12" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][3]."><Real start="0.0"/></ScalarVariable>
     <ScalarVariable name="K_yrc_x_0_4" valueReference="13" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][4]."><Real start="0.0"/></ScalarVariable>
     <ScalarVariable name="K_yrc_x_0_5" valueReference="14" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller state gain K_yrc_x[0][5]."><Real start="0.0"/></ScalarVariable>
-    
+
     <!-- K_yrc_psi Matrix (yaw rate controller psi_dot gain) - 1x1 -->
     <ScalarVariable name="K_yrc_psi_0_0" valueReference="15" causality="parameter" variability="fixed" initial="exact" description="Yaw rate controller psi_dot gain K_yrc_psi[0][0]."><Real start="0.2876"/></ScalarVariable>
 
@@ -65,7 +71,7 @@
     <ScalarVariable name="noise_mean_3" valueReference="25" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[3]."><Real start="0.0"/></ScalarVariable>
     <ScalarVariable name="noise_mean_4" valueReference="26" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[4]."><Real start="0.0"/></ScalarVariable>
     <ScalarVariable name="noise_mean_5" valueReference="27" causality="parameter" variability="fixed" description="Mean of Gaussian noise for state x[5]."><Real start="0.0"/></ScalarVariable>
-    
+
     <!-- Noise Standard Deviation - 6 states -->
     <ScalarVariable name="noise_std_dev_0" valueReference="28" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[0]."><Real start="0.0"/></ScalarVariable>
     <ScalarVariable name="noise_std_dev_1" valueReference="29" causality="parameter" variability="fixed" description="Standard deviation of Gaussian noise for state x[1]."><Real start="0.0"/></ScalarVariable>
@@ -143,7 +149,7 @@
 
     <!-- act_out (Actuator Output) - 1 component -->
     <ScalarVariable name="act_out_0" valueReference="1022" causality="output" variability="continuous" description="Final steering angle command output from the actuator."><Real/></ScalarVariable>
-    
+
     <!-- Simulation Time and Step -->
     <ScalarVariable name="current_time_out" valueReference="1023" causality="output" variability="continuous" description="Current simulation time."><Real/></ScalarVariable>
     <ScalarVariable name="current_step_out" valueReference="1024" causality="output" variability="discrete" description="Current simulation step number."><Integer/></ScalarVariable>
