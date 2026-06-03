@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(LateralMotionControl C)
+project(LateralMotionControl C CXX)
 
 add_library(LateralMotionControl SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/LateralMotionControl/sources/LateralMotionControl.c
@@ -31,6 +31,8 @@ add_custom_command(TARGET LateralMotionControl POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo
         "Installed into LateralMotionControl/binaries/linux64/"
 )
+
+add_subdirectory(harness)
 
 set(FMU_STAGING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/LateralMotionControl")
 set(FMU_OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LateralMotionControl.fmu")
