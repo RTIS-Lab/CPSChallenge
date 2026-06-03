@@ -161,6 +161,22 @@ static constexpr double PERIOD_FEEDFORWARD = 0.020;   // 20 ms
 static constexpr double PERIOD_MERGER      = 0.020;   // 20 ms
 static constexpr double PERIOD_ACTUATOR    = 0.030;   // 30 ms
 
+// Simple trigger model: fire both activated and finished simultaneously at
+// each task's period boundary. This gives the most responsive control loop
+// possible — each task computes and outputs in the same step it's activated.
+// For a more realistic simulation, separate the triggers by execution time
+// (BCET/WCET) and model network delays.
+struct TriggerState {
+    bool sensor     = false;
+    bool net_sc     = false;
+    bool estimator  = false;
+    bool controller = false;
+    bool feedforward = false;
+    bool merger     = false;
+    bool net_ca     = false;
+    bool actuator   = false;
+};
+
 // Base simulation step
 static constexpr double SIM_STEP = 0.0001;  // 0.1 ms
 
@@ -232,12 +248,12 @@ public:
             return false;
         }
 
-        std::cout << "Successfully loaded FMU from: " << soPath << std::endl;
+        std::cerr << "Successfully loaded FMU from: " << soPath << std::endl;
         if (m_fmi2GetVersion) {
-            std::cout << "  FMI Version: " << m_fmi2GetVersion() << std::endl;
+            std::cerr << "  FMI Version: " << m_fmi2GetVersion() << std::endl;
         }
         if (m_fmi2GetTypesPlatform) {
-            std::cout << "  Types Platform: " << m_fmi2GetTypesPlatform() << std::endl;
+            std::cerr << "  Types Platform: " << m_fmi2GetTypesPlatform() << std::endl;
         }
         return true;
     }
@@ -264,8 +280,35 @@ public:
             return false;
         }
 
-        std::cout << "FMU instance '" << instanceName << "' created successfully." << std::endl;
+        std::cerr << "FMU instance '" << instanceName << "' created successfully." << std::endl;
         return true;
+    }
+
+    void setGains() {
+        // K_trc_fb (VR 1-6)
+        fmi2ValueReference vr_fb[] = {1, 2, 3, 4, 5, 6};
+        fmi2Real val_fb[] = {-0.987, 0.0, 0.0, 0.0, 8.0, 1.75};
+        m_fmi2SetReal(m_comp, vr_fb, 6, val_fb);
+
+        // K_trc_ff (VR 7-8)
+        fmi2ValueReference vr_ff[] = {7, 8};
+        fmi2Real val_ff[] = {1.987, 0.1974};
+        m_fmi2SetReal(m_comp, vr_ff, 2, val_ff);
+
+        // K_yrc_x (VR 9-14)
+        fmi2ValueReference vr_yrc_x[] = {9, 10, 11, 12, 13, 14};
+        fmi2Real val_yrc_x[] = {-0.2876, 0.0, 1.0, 0.0, 0.0, 0.0};
+        m_fmi2SetReal(m_comp, vr_yrc_x, 6, val_yrc_x);
+
+        // K_yrc_psi (VR 15)
+        fmi2ValueReference vr_yrc_psi = 15;
+        fmi2Real val_yrc_psi = 0.2876;
+        m_fmi2SetReal(m_comp, &vr_yrc_psi, 1, &val_yrc_psi);
+        
+        // Initial velocity (VR 34)
+        fmi2ValueReference vr_v0 = 34;
+        fmi2Real val_v0 = 10.0;
+        m_fmi2SetReal(m_comp, &vr_v0, 1, &val_v0);
     }
 
     bool setupExperiment(double startTime, double stopTime) {
@@ -283,11 +326,7 @@ public:
             return false;
         }
 
-        // Set initial parameters here if needed (before exiting init mode)
-        // For example, set init_velocity:
-        //   fmi2ValueReference vrVel = 44;  // VR_INIT_VELOCITY
-        //   fmi2Real velValue = 10.0;
-        //   m_fmi2SetReal(m_comp, &vrVel, 1, &velValue);
+        setGains();
 
         status = m_fmi2ExitInitializationMode(m_comp);
         if (status != fmi2OK) {
@@ -295,7 +334,7 @@ public:
             return false;
         }
 
-        std::cout << "Experiment setup: t=[" << startTime << ", " << stopTime << "]" << std::endl;
+        std::cerr << "Experiment setup: t=[" << startTime << ", " << stopTime << "]" << std::endl;
         return true;
     }
 
@@ -377,6 +416,29 @@ public:
     void getActOut(double& act_out) {
         fmi2ValueReference vr = VR_ACT_OUT_START;
         m_fmi2GetReal(m_comp, &vr, 1, &act_out);
+    }
+
+    // Read a single real output by VR
+    double getReal(fmi2ValueReference vr) {
+        fmi2Real val = 0;
+        m_fmi2GetReal(m_comp, &vr, 1, &val);
+        return val;
+    }
+
+    // Read a single boolean input by VR (for debugging triggers)
+    fmi2Boolean getBoolean(fmi2ValueReference vr) {
+        fmi2Boolean val = fmi2False;
+        m_fmi2GetBoolean(m_comp, &vr, 1, &val);
+        return val;
+    }
+
+    // Read an array of real outputs starting at a given VR
+    void getRealArray(fmi2ValueReference start, size_t count, double* out) {
+        fmi2ValueReference* vrs = new fmi2ValueReference[count];
+        for (size_t i = 0; i < count; i++)
+            vrs[i] = (fmi2ValueReference)(start + i);
+        m_fmi2GetReal(m_comp, vrs, count, out);
+        delete[] vrs;
     }
 
     void getPerformance(double& real_rolling, double& real_average,
@@ -510,22 +572,53 @@ static double lookupAtTime(const std::vector<double>& timeVec,
     return dataVec[lo];
 }
 
+// ─── Helper: Compute path heading from track data ───────────────────
+// Uses finite differences on (x_track, y_track) to estimate the
+// path heading angle psi_path at time t. The heading is needed
+// because e_y is a perpendicular offset from the path, not a
+// vertical offset. Without this correction, the vehicle position
+// is only correct when the path is aligned with the x-axis.
+
+static double computePathHeading(const std::vector<double>& timeVec,
+                                  const std::vector<double>& xTrackData,
+                                  const std::vector<double>& yTrackData,
+                                  double t)
+{
+    if (timeVec.size() < 2 || xTrackData.size() < 2 || yTrackData.size() < 2) {
+        return 0.0; // default: heading along +x
+    }
+    // Find the index for time t
+    size_t idx = (size_t)(t / SIM_STEP + 0.5);
+    if (idx >= xTrackData.size()) idx = xTrackData.size() - 1;
+
+    // Use finite differences: dt corresponds to SIM_STEP (0.1 ms)
+    size_t idx_plus  = (idx + 1 < xTrackData.size()) ? idx + 1 : idx;
+    size_t idx_minus = (idx > 0) ? idx - 1 : idx;
+
+    double dx = xTrackData[idx_plus] - xTrackData[idx_minus];
+    double dy = yTrackData[idx_plus] - yTrackData[idx_minus];
+
+    return std::atan2(dy, dx);
+}
+
 // ─── Main ───────────────────────────────────────────────────────────
 
 int main(int argc, char* argv[]) {
-    std::cout << "=== LateralMotionControl FMU Harness ===" << std::endl;
+    std::cerr << "=== LateralMotionControl FMU Harness ===" << std::endl;
 
     // ── Configuration ────────────────────────────────────────────────
     std::string soPath       = FMU_SO_PATH;
     std::string exampleDir   = EXAMPLE_DIR;
     double simDuration       = 5.0;      // seconds (short demo)
     double commStepSize      = 0.001;    // 1 ms communication step size
+    bool debugChain          = false;    // print task-chain debug output every step
 
     // Override from command line
     if (argc >= 2) soPath = argv[1];
     if (argc >= 3) exampleDir = argv[2];
     if (argc >= 4) simDuration = std::stod(argv[3]);
     if (argc >= 5) commStepSize = std::stod(argv[4]);
+    if (argc >= 6) debugChain = (std::string(argv[5]) == "debug");
 
     // ── Load the FMU ────────────────────────────────────────────────
     LateralMotionControlFMU fmu;
@@ -557,10 +650,10 @@ int main(int argc, char* argv[]) {
     // ── Simulation Loop ──────────────────────────────────────────────
     double time = 0.0;
 
-    std::cout << std::endl;
-    std::cout << "Starting simulation: duration=" << simDuration
+    std::cerr << std::endl;
+    std::cerr << "Starting simulation: duration=" << simDuration
               << "s, commStepSize=" << commStepSize * 1000 << "ms" << std::endl;
-    std::cout << std::endl;
+    std::cerr << std::endl;
 
     // CSV header — full state + track position approximation
     // State: phi_dot, beta, delta, delta_dot, e_y, e_y_dot
@@ -568,10 +661,13 @@ int main(int argc, char* argv[]) {
     std::cout << "time,phi_dot,beta,delta,delta_dot,e_y,e_y_dot,"
               << "act_out,velocity,x_track,y_track,xveh,yveh,"
               << "real_rolling_perf,real_avg_perf,"
-              << "real_thresh_errors,real_critical,real_violated"
+              << "real_thresh_errors,real_critical,real_violated,"
+              << "ff_ref_0,ff_ref_1,"
+              << "trig_sens,trig_net_sc,trig_est,trig_ctrl,trig_ff,trig_merger,trig_net_ca,trig_act"
               << std::endl;
 
     double lastPrintedTime = -1.0;  // ensures first step always prints
+    TriggerState trig = {};          // which tasks fire at this timestep
 
     while (time < simDuration - 1e-12) {
         // ── Set inputs based on example data ─────────────────────────
@@ -582,36 +678,36 @@ int main(int argc, char* argv[]) {
         fmu.setRealInputs(ff_ref_0, ff_ref_1, velocity);
 
         // ── Determine which triggers fire at this timestep ────────────
-        // Simplified schedule: tasks fire at their periods, with both
-        // activated + finished pulsed together in the same step.
-        //
-        // In a real co-simulation, a scheduling simulator would
-        // determine when tasks start and finish. Here we use a naive
-        // periodic schedule where each task's triggers are pulsed
-        // together at the task's period boundary.
-
+        // Simple model: fire activated+finished together when the task's
+        // period aligns. Network triggers fire with their source task.
         double eps = 1e-12;
-        bool sensor_fire     = (fmod(time + eps, PERIOD_SENSOR) < commStepSize + eps);
-        bool net_sc_fire     = sensor_fire;  // network SC sends right after sensor
-        bool estimator_fire  = (fmod(time + eps, PERIOD_ESTIMATOR) < commStepSize + eps);
-        bool controller_fire = (fmod(time + eps, PERIOD_CONTROLLER) < commStepSize + eps);
-        bool ff_fire         = (fmod(time + eps, PERIOD_FEEDFORWARD) < commStepSize + eps);
-        bool merger_fire     = (fmod(time + eps, PERIOD_MERGER) < commStepSize + eps);
-        bool net_ca_fire     = merger_fire;   // network CA sends right after merger
-        bool actuator_fire   = (fmod(time + eps, PERIOD_ACTUATOR) < commStepSize + eps);
+        trig.sensor     = (fmod(time + eps, PERIOD_SENSOR) < commStepSize + eps);
+        trig.estimator  = (fmod(time + eps, PERIOD_ESTIMATOR) < commStepSize + eps);
+        trig.controller = (fmod(time + eps, PERIOD_CONTROLLER) < commStepSize + eps);
+        // Feedforward fires on its period, but also whenever ff_ref is
+        // meaningfully non-zero so the plant responds without delay.
+        const double FF_REF_THRESH = 1e-6;
+        bool ffRefActive = (std::fabs(ff_ref_0) > FF_REF_THRESH ||
+                            std::fabs(ff_ref_1) > FF_REF_THRESH);
+        trig.feedforward = (fmod(time + eps, PERIOD_FEEDFORWARD) < commStepSize + eps)
+                         || ffRefActive;
+        // Merger must also fire when feedforward is active, since it
+        // combines the feedforward and feedback commands.
+        trig.merger     = (fmod(time + eps, PERIOD_MERGER) < commStepSize + eps)
+                         || ffRefActive;
+        trig.actuator   = (fmod(time + eps, PERIOD_ACTUATOR) < commStepSize + eps);
+        trig.net_sc     = trig.sensor;    // network SC fires with sensor
+        trig.net_ca     = trig.merger;   // network CA fires with merger
 
-        // Pulse both activated and finished together on the same step.
-        // A more realistic simulation would separate activation (start)
-        // and finished (completion) by the task's execution time.
         fmu.setTriggers(
-            sensor_fire, sensor_fire,        // sensor: activated + finished
-            net_sc_fire, net_sc_fire,         // network SC: sent + received
-            estimator_fire, estimator_fire,   // estimator: activated + finished
-            controller_fire, controller_fire, // controller: activated + finished
-            ff_fire, ff_fire,                 // feedforward: activated + finished
-            merger_fire, merger_fire,         // merger: activated + finished
-            net_ca_fire, net_ca_fire,         // network CA: sent + received
-            actuator_fire, actuator_fire      // actuator: activated + finished
+            trig.sensor,     trig.sensor,          // sensor: activated + finished
+            trig.net_sc,     trig.net_sc,           // network SC: sent + received
+            trig.estimator,  trig.estimator,        // estimator: activated + finished
+            trig.controller, trig.controller,       // controller: activated + finished
+            trig.feedforward, trig.feedforward,    // feedforward: activated + finished
+            trig.merger,     trig.merger,           // merger: activated + finished
+            trig.net_ca,     trig.net_ca,           // network CA: sent + received
+            trig.actuator,   trig.actuator           // actuator: activated + finished
         );
 
         // ── Step the FMU ─────────────────────────────────────────────
@@ -622,11 +718,51 @@ int main(int argc, char* argv[]) {
             break;
         }
 
+        // ── Debug: dump task-chain internals ────────────────────────
+        if (debugChain) {
+            double sens_out[5] = {0};
+            fmu.getRealArray(VR_SENS_OUT_START, 5, sens_out);
+            double est_out[6] = {0};
+            fmu.getRealArray(VR_EST_STATES_OUT_START, 6, est_out);
+            double ctrl_out = fmu.getReal(VR_CNTRL_OUT_START);
+            double ff_out0 = fmu.getReal(static_cast<fmi2ValueReference>(VR_FFOUT_START));
+            double ff_out1 = fmu.getReal(static_cast<fmi2ValueReference>(VR_FFOUT_START + 1));
+            double ff_psi_dot = fmu.getReal(VR_FFOUT_PSI_DOT_START);
+            double agg_out = fmu.getReal(VR_AGG_OUT_START);
+            double act_out_dbg = fmu.getReal(VR_ACT_OUT_START);
+
+            std::cerr << "t=" << time
+                      << " sens=[" << sens_out[0] << "," << sens_out[1] << "," << sens_out[2] << "," << sens_out[3] << "," << sens_out[4] << "]"
+                      << " est=[" << est_out[0] << "," << est_out[1] << "," << est_out[2] << "," << est_out[3] << "," << est_out[4] << "," << est_out[5] << "]"
+                      << " ctrl=" << ctrl_out
+                      << " ff=[" << ff_out0 << "," << ff_out1 << "]"
+                      << " ff_psi=" << ff_psi_dot
+                      << " agg=" << agg_out
+                      << " act=" << act_out_dbg
+                      << " ff_ref=[" << ff_ref_0 << "," << ff_ref_1 << "]"
+                      << " vel=" << velocity;
+            // Read back the triggers we just set
+            fmi2ValueReference trigVRs[16] = {
+                VR_SENSOR_TRIGGER_ACTIVATED_INPUT, VR_SENSOR_TRIGGER_FINISHED_INPUT,
+                VR_NETWORK_SC_TRIGGER_SENT_INPUT, VR_NETWORK_CA_TRIGGER_RECEIVED_INPUT,
+                VR_ESTIMATOR_TRIGGER_ACTIVATED_INPUT, VR_ESTIMATOR_TRIGGER_FINISHED_INPUT,
+                VR_CONTROLLER_TRIGGER_ACTIVATED_INPUT, VR_CONTROLLER_TRIGGER_FINISHED_INPUT,
+                VR_FEEDFORWARD_TRIGGER_ACTIVATED_INPUT, VR_FEEDFORWARD_TRIGGER_FINISHED_INPUT,
+                VR_MERGER_TRIGGER_ACTIVATED_INPUT, VR_MERGER_TRIGGER_FINISHED_INPUT,
+                VR_NETWORK_CA_TRIGGER_SENT_INPUT, VR_NETWORK_CA_TRIGGER_RECEIVED_INPUT,
+                VR_ACTUATOR_TRIGGER_ACTIVATED_INPUT, VR_ACTUATOR_TRIGGER_FINISHED_INPUT,
+            };
+            std::cerr << " trig=[";
+            for (int i = 0; i < 16; i++) std::cerr << (fmu.getBoolean(trigVRs[i]) ? "1" : "0");
+            std::cerr << "]" << std::endl;
+        }
+
         // ── Read outputs periodically ────────────────────────────────
         // Print every ~100ms. Use lastPrintedTime to avoid double-prints
         // that the modulo approach produces at boundary steps.
-        double printInterval = 0.1;
-        bool shouldPrint = ((time - lastPrintedTime) >= printInterval - eps);
+        // Print every step for full-resolution task-chain visualization
+        double printInterval = commStepSize;
+        bool shouldPrint = true;
 
         if (shouldPrint) {
             double physState[6] = {0};
@@ -641,13 +777,17 @@ int main(int argc, char* argv[]) {
             fmu.getPerformance(real_rolling, real_average, real_thresh_errors,
                                real_critical, real_violated);
 
-            // Approximate vehicle position from track reference + lateral error
+            // Calculate vehicle position by offsetting track reference by lateral error.
+            // e_y is a perpendicular offset (Positive = RIGHT of path).
             double x_track = lookupAtTime(timeVec, xTrackData, time);
             double y_track = lookupAtTime(timeVec, yTrackData, time);
-            double x_veh = x_track;
-            double y_veh = y_track + physState[4]; // y_track + e_y
+            double psi_path = computePathHeading(timeVec, xTrackData, yTrackData, time);
+            double e_y = physState[4];
 
-            std::cout << std::fixed << std::setprecision(4)
+            double x_veh = x_track + e_y * std::sin(psi_path);
+            double y_veh = y_track - e_y * std::cos(psi_path);
+
+            std::cout << std::fixed << std::setprecision(6)
                       << time << ","
                       << physState[0] << ","  // phi_dot (yaw rate)
                       << physState[1] << ","  // beta (slip angle)
@@ -665,24 +805,20 @@ int main(int argc, char* argv[]) {
                       << real_average << ","
                       << real_thresh_errors << ","
                       << real_critical << ","
-                      << real_violated
+                      << real_violated << ","
+                      << ff_ref_0 << ","
+                      << ff_ref_1 << ","
+                      << (trig.sensor ? 1 : 0) << ","
+                      << (trig.net_sc ? 1 : 0) << ","
+                      << (trig.estimator ? 1 : 0) << ","
+                      << (trig.controller ? 1 : 0) << ","
+                      << (trig.feedforward ? 1 : 0) << ","
+                      << (trig.merger ? 1 : 0) << ","
+                      << (trig.net_ca ? 1 : 0) << ","
+                      << (trig.actuator ? 1 : 0)
                       << std::endl;
             lastPrintedTime = time;
         }
-
-        // ── Clear all triggers for next step ──────────────────────────
-        // After processing, set all triggers to false for the next cycle.
-        // Triggers should only be true for the step where they fire.
-        fmu.setTriggers(
-            false, false,  // sensor
-            false, false,  // network SC
-            false, false,  // estimator
-            false, false,  // controller
-            false, false,  // feedforward
-            false, false,  // merger
-            false, false,  // network CA
-            false, false   // actuator
-        );
 
         time += commStepSize;
     }
@@ -713,11 +849,15 @@ int main(int argc, char* argv[]) {
         std::cerr << "]" << std::endl;
         double x_track_final = lookupAtTime(timeVec, xTrackData, time);
         double y_track_final = lookupAtTime(timeVec, yTrackData, time);
+        double psi_path_final = computePathHeading(timeVec, xTrackData, yTrackData, time);
+        double e_y_final = physState[4];
+        double x_veh_final = x_track_final + e_y_final * std::sin(psi_path_final);
+        double y_veh_final = y_track_final - e_y_final * std::cos(psi_path_final);
 
         std::cerr << "  Steering output (act_out): " << act_out << std::endl;
         std::cerr << "  Lateral error (e_y):       " << physState[4] << std::endl;
         std::cerr << "  Track position:             (" << x_track_final << ", " << y_track_final << ")" << std::endl;
-        std::cerr << "  Vehicle position (approx):  (" << x_track_final << ", " << y_track_final + physState[4] << ")" << std::endl;
+        std::cerr << "  Vehicle position (approx):  (" << x_veh_final << ", " << y_veh_final << ")" << std::endl;
         std::cerr << "  Real avg performance:      " << real_average << std::endl;
         std::cerr << "  Real rolling performance:  " << real_rolling << std::endl;
         std::cerr << "  Threshold error counter:   " << real_thresh_errors << std::endl;

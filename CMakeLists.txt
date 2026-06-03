@@ -33,6 +33,7 @@ add_custom_command(TARGET LateralMotionControl POST_BUILD
 )
 
 add_subdirectory(harness)
+add_subdirectory(visualizer)
 
 set(FMU_STAGING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/LateralMotionControl")
 set(FMU_OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LateralMotionControl.fmu")
